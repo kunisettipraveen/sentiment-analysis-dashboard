@@ -5,6 +5,6 @@ scikit-learn==1.2.2
 nltk==3.8.1
 matplotlib==3.7.1
 seaborn==0.12.2
-plotly==5.18.0
 wordcloud==1.9.2
-Pillow==9.5.0
+plotly==5.18.0
+joblib==1.2.0

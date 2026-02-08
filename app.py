@@ -2,7 +2,12 @@
 Streamlit Dashboard for Product Review Sentiment Analysis
 Complete interactive dashboard with 5 pages
 """
+import nltk
 
+# Download required NLTK data (needed for Streamlit Cloud)
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -1309,3 +1314,4 @@ elif page == "ℹ️ About":
         <p style='font-size: 1rem; margin: 0.5rem;'>Product Review Sentiment Analysis Dashboard</p>
     </div>
     """, unsafe_allow_html=True)
+

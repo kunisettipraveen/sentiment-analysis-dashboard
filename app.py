@@ -2,12 +2,7 @@
 Streamlit Dashboard for Product Review Sentiment Analysis
 Complete interactive dashboard with 5 pages
 """
-import nltk
 
-# Download required NLTK data (needed for Streamlit Cloud)
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -1016,6 +1011,61 @@ elif page == "📊 Model Insights":
             except Exception as e:
                 st.info("Word cloud generation requires additional setup. Showing word list instead.")
                 st.write(", ".join(positive_words[:20]))
+        # ---------------- HISTOGRAM (MODEL CONFIDENCE) ----------------
+
+        st.markdown("---")
+        st.markdown("## 📊 Prediction Confidence Histogram")
+
+        try:
+            confidence_scores = []
+
+            # sample reviews to check model confidence
+            sample_reviews = [
+                "This product is amazing and works perfectly",
+                "Worst purchase ever very disappointed",
+                "Average quality nothing special",
+                "I really loved this item highly recommend",
+                "Not worth the money",
+                "It is okay",
+                "Very bad quality and broken",
+                "Superb performance excellent",
+                "Packaging was normal",
+                "Terrible experience"
+            ]
+
+            for text in sample_reviews:
+                cleaned = preprocessor.preprocess(text)
+                features = vectorizer.transform([cleaned])
+                probs = model.predict_proba(features)[0]
+
+                confidence = max(probs) * 100
+                confidence_scores.append(confidence)
+
+            # Create histogram
+            fig = px.histogram(
+                x=confidence_scores,
+                nbins=10,
+                labels={"x": "Prediction Confidence (%)", "y": "Number of Reviews"},
+                color_discrete_sequence=["#00c6ff"]
+            )
+
+            fig.update_layout(
+                title="Model Confidence Score Distribution",
+                xaxis_title="Confidence %",
+                yaxis_title="Frequency",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                height=450
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.info("Histogram shows how confident the model is while predicting sentiment. High confidence near 100% means strong prediction reliability.")
+
+        except Exception as e:
+            st.warning("Histogram could not be generated.")
+
 
 # PAGE 4: BATCH ANALYSIS
 elif page == "📁 Batch Analysis":
@@ -1131,20 +1181,29 @@ elif page == "📁 Batch Analysis":
                             for idx, review in enumerate(df[review_column]):
                                 try:
                                     cleaned = preprocessor.preprocess(str(review))
+
                                     if cleaned.strip():
                                         features = vectorizer.transform([cleaned])
-                                        prediction = model.predict(features)[0]
-                                        probabilities = model.predict_proba(features)[0]
-                                        
-                                        prediction = str(prediction)
 
-                                        # find correct probability using class index
-                                        class_index = list(model.classes_).index(prediction)
-                                        confidence = probabilities[class_index]
+                                        # get probabilities
+                                        probabilities = model.predict_proba(features)[0]
+
+                                        negative_prob = probabilities[0]
+                                        positive_prob = probabilities[1]
+
+                                        confidence = max(negative_prob, positive_prob)
+
+                                        # ---- NEUTRAL LOGIC ----
+                                        if confidence < 0.60:
+                                            final_prediction = "Neutral"
+                                        elif positive_prob > negative_prob:
+                                            final_prediction = "Positive"
+                                        else:
+                                            final_prediction = "Negative"
 
                                         results.append({
                                             'Review': str(review)[:100] + "..." if len(str(review)) > 100 else str(review),
-                                            'Sentiment': prediction.capitalize(),
+                                            'Sentiment': final_prediction,
                                             'Confidence': f"{confidence*100:.2f}%"
                                         })
 
@@ -1207,13 +1266,60 @@ elif page == "📁 Batch Analysis":
                             
                             # Visualization
                             st.markdown("### 📈 Sentiment Distribution")
-                            fig = px.pie(
-                                values=[positive_count, negative_count],
-                                names=['Positive', 'Negative'],
-                                color=['Positive', 'Negative'],
-                                color_discrete_map={'Positive': '#56ab2f', 'Negative': '#eb3349'}
+                            # --------- Attractive Donut Chart ---------
+
+                            total_reviews = positive_count + negative_count + neutral_count
+
+                            fig = go.Figure(data=[go.Pie(
+                                labels=['Positive 😊', 'Negative 😡', 'Neutral 😐'],
+                                values=[positive_count, negative_count, neutral_count],
+                                hole=0.55,   # makes donut chart
+                                textinfo='percent+label',
+                                textfont=dict(size=15, color='white'),
+                                marker=dict(
+                                    colors=['#2ecc71', '#e74c3c', '#f1c40f'],
+                                    line=dict(color='#0f2027', width=3)
+                                ),
+                                hovertemplate=
+                                "<b>%{label}</b><br>" +
+                                "Reviews: %{value}<br>" +
+                                "Percentage: %{percent}<extra></extra>"
+                            )])
+
+                            # Center Text
+                            fig.add_annotation(
+                                text=f"<b>{total_reviews}</b><br>Total Reviews",
+                                x=0.5, y=0.5,
+                                font_size=22,
+                                showarrow=False,
+                                font_color="white"
                             )
+
+                            # Layout styling
+                            fig.update_layout(
+                                title={
+                                    'text': "📊 Overall Sentiment Distribution",
+                                    'y':0.95,
+                                    'x':0.5,
+                                    'xanchor': 'center',
+                                    'yanchor': 'top',
+                                    'font': dict(size=22, color='white')
+                                },
+                                legend=dict(
+                                    orientation="h",
+                                    yanchor="bottom",
+                                    y=-0.15,
+                                    xanchor="center",
+                                    x=0.5,
+                                    font=dict(size=13, color="white")
+                                ),
+                                paper_bgcolor="rgba(0,0,0,0)",
+                                plot_bgcolor="rgba(0,0,0,0)",
+                                height=500
+                            )
+
                             st.plotly_chart(fig, use_container_width=True)
+
                             
             except Exception as e:
                 st.error(f"Error reading CSV file: {str(e)}")
@@ -1314,4 +1420,3 @@ elif page == "ℹ️ About":
         <p style='font-size: 1rem; margin: 0.5rem;'>Product Review Sentiment Analysis Dashboard</p>
     </div>
     """, unsafe_allow_html=True)
-

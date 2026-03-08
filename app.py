@@ -567,6 +567,10 @@ if page == "🏠 Home":
         positive_count = metrics.get('positive_count', 0)
         negative_count = metrics.get('negative_count', 0)
         neutral_count  = metrics.get('neutral_count', 0)
+
+        positive_percentage = (positive_count / total_reviews) * 100
+        negative_percentage = (negative_count / total_reviews) * 100
+        neutral_percentage  = (neutral_count / total_reviews) * 100
     else:
         total_reviews = 568453
         accuracy = 84.80
@@ -579,15 +583,17 @@ if page == "🏠 Home":
         st.markdown(f"""
         <div class="metric-card">
             <p class="metric-value">{total_reviews:,}</p>
-            <p class="metric-label">📊 Reviews</p>
+            <p class="metric-label">📊 Reviews (100%)</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
+        correct_predictions = int((accuracy/100) * total_reviews)
+
         st.markdown(f"""
         <div class="metric-card positive">
             <p class="metric-value">{accuracy:.2f}%</p>
-            <p class="metric-label">⚡ Accuracy</p>
+            <p class="metric-label">⚡ Accuracy ({correct_predictions:,} correct)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -595,7 +601,7 @@ if page == "🏠 Home":
         st.markdown(f"""
         <div class="metric-card positive">
             <p class="metric-value">{positive_count:,}</p>
-            <p class="metric-label">✅ Positive</p>
+            <p class="metric-label">✅ Positive ({positive_percentage:.2f}%)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -603,7 +609,7 @@ if page == "🏠 Home":
         st.markdown(f"""
         <div class="metric-card negative">
             <p class="metric-value">{negative_count:,}</p>
-            <p class="metric-label">❌ Negative</p>
+            <p class="metric-label">❌ Negative ({negative_percentage:.2f}%)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -612,7 +618,7 @@ if page == "🏠 Home":
         st.markdown(f"""
         <div class="metric-card neutral">
             <p class="metric-value">{neutral_count:,}</p>
-            <p class="metric-label">😐 Neutral</p>
+            <p class="metric-label">😐 Neutral ({neutral_percentage:.2f}%)</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -889,84 +895,94 @@ elif page == "📊 Model Insights":
         st.error("⚠️ Model files not found! Please run 'train_model.py' first.")
     else:
         # Get top words from model
+        # -------- WORD IMPORTANCE FOR LOGISTIC REGRESSION --------
         feature_names = vectorizer.get_feature_names_out()
         n_words = 15
-        
-        # Negative words (class 0)
-        negative_indices = model.feature_log_prob_[0].argsort()[-n_words:][::-1]
-        negative_words = [feature_names[idx] for idx in negative_indices]
-        negative_scores = [model.feature_log_prob_[0][idx] for idx in negative_indices]
-        
-        # Positive words (class 1)
-        positive_indices = model.feature_log_prob_[1].argsort()[-n_words:][::-1]
-        positive_words = [feature_names[idx] for idx in positive_indices]
-        positive_scores = [model.feature_log_prob_[1][idx] for idx in positive_indices]
 
-        # Neutral words (class 2)
-        neutral_indices = model.feature_log_prob_[2].argsort()[-n_words:][::-1]
-        neutral_words = [feature_names[idx] for idx in neutral_indices]
-        neutral_scores = [model.feature_log_prob_[2][idx] for idx in neutral_indices]
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("### 🔴 Top Negative Words")
-            fig = go.Figure(go.Bar(
-                x=negative_scores[::-1],
-                y=negative_words[::-1],
-                orientation='h',
-                marker=dict(color='#eb3349'),
-                text=[f'{score:.2f}' for score in negative_scores[::-1]],
-                textposition='auto'
-            ))
-            fig.update_layout(
-                height=500, 
-                xaxis_title="Log Probability",
-                yaxis_title="",
-                title="Top 15 Negative Indicators",
-                showlegend=False
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            st.markdown("### 🟢 Top Positive Words")
-            fig = go.Figure(go.Bar(
-                x=positive_scores[::-1],
-                y=positive_words[::-1],
-                orientation='h',
-                marker=dict(color='#56ab2f'),
-                text=[f'{score:.2f}' for score in positive_scores[::-1]],
-                textposition='auto'
-            ))
-            fig.update_layout(
-                height=500, 
-                xaxis_title="Log Probability",
-                yaxis_title="",
-                title="Top 15 Positive Indicators",
-                showlegend=False
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        # coefficients: rows = classes, columns = words
+        coefs = model.coef_
+        classes = list(model.classes_)
 
-        with col3:
-            st.markdown("### 🟡 Top Neutral Words")
-            fig = go.Figure(go.Bar(
-                x=neutral_scores[::-1],
-                y=neutral_words[::-1],
-                orientation='h',
-                marker=dict(color='#f2c94c'),
-                text=[f'{score:.2f}' for score in neutral_scores[::-1]],
-                textposition='auto'
-            ))
+        # get class index safely
+        pos_index = classes.index("positive")
+        neg_index = classes.index("negative")
+        neu_index = classes.index("neutral")
 
-            fig.update_layout(
-                height=500,
-                xaxis_title="Log Probability",
-                yaxis_title="",
-                title="Top 15 Neutral Indicators",
-                showlegend=False
-            )
+        # positive words
+        positive_indices = coefs[pos_index].argsort()[-n_words:][::-1]
+        positive_words = [feature_names[i] for i in positive_indices]
+        positive_scores = coefs[pos_index][positive_indices]
 
-            st.plotly_chart(fig, use_container_width=True)
+        # negative words
+        negative_indices = coefs[neg_index].argsort()[-n_words:][::-1]
+        negative_words = [feature_names[i] for i in negative_indices]
+        negative_scores = coefs[neg_index][negative_indices]
+
+        # neutral words
+        neutral_indices = coefs[neu_index].argsort()[-n_words:][::-1]
+        neutral_words = [feature_names[i] for i in neutral_indices]
+        neutral_scores = coefs[neu_index][neutral_indices]
+        
+        # col1, col2, col3 = st.columns(3)
+        
+        # with col1:
+        #     st.markdown("### 🔴 Top Negative Words")
+        #     fig = go.Figure(go.Bar(
+        #         x=negative_scores[::-1],
+        #         y=negative_words[::-1],
+        #         orientation='h',
+        #         marker=dict(color='#eb3349'),
+        #         text=[f'{score:.2f}' for score in negative_scores[::-1]],
+        #         textposition='auto'
+        #     ))
+        #     fig.update_layout(
+        #         height=500, 
+        #         xaxis_title="Log Probability",
+        #         yaxis_title="",
+        #         title="Top 15 Negative Indicators",
+        #         showlegend=False
+        #     )
+        #     st.plotly_chart(fig, use_container_width=True)
+        
+        # with col2:
+        #     st.markdown("### 🟢 Top Positive Words")
+        #     fig = go.Figure(go.Bar(
+        #         x=positive_scores[::-1],
+        #         y=positive_words[::-1],
+        #         orientation='h',
+        #         marker=dict(color='#56ab2f'),
+        #         text=[f'{score:.2f}' for score in positive_scores[::-1]],
+        #         textposition='auto'
+        #     ))
+        #     fig.update_layout(
+        #         height=500, 
+        #         xaxis_title="Log Probability",
+        #         yaxis_title="",
+        #         title="Top 15 Positive Indicators",
+        #         showlegend=False
+        #     )
+        #     st.plotly_chart(fig, use_container_width=True)
+
+        # with col3:
+        #     st.markdown("### 🟡 Top Neutral Words")
+        #     fig = go.Figure(go.Bar(
+        #         x=neutral_scores[::-1],
+        #         y=neutral_words[::-1],
+        #         orientation='h',
+        #         marker=dict(color='#f2c94c'),
+        #         text=[f'{score:.2f}' for score in neutral_scores[::-1]],
+        #         textposition='auto'
+        #     ))
+
+        #     fig.update_layout(
+        #         height=500,
+        #         xaxis_title="Log Probability",
+        #         yaxis_title="",
+        #         title="Top 15 Neutral Indicators",
+        #         showlegend=False
+        #     )
+
+        #     st.plotly_chart(fig, use_container_width=True)
                 
         # Word Clouds
         st.markdown("---")
